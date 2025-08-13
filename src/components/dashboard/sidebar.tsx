@@ -1,0 +1,104 @@
+"use client";
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { cn } from '@/lib/utils';
+import {
+  LayoutDashboard,
+  FileText,
+  Users,
+  Settings,
+  LogOut
+} from 'lucide-react';
+import { signOut } from '@/lib/auth';
+
+const navItems = [
+  {
+    title: 'Dashboard',
+    href: '/dashboard',
+    icon: LayoutDashboard,
+  },
+  {
+    title: 'Invoices',
+    href: '/dashboard/invoices',
+    icon: FileText,
+  },
+  // Keep legacy single Customers link for backward-compat
+  { title: 'Customers', href: '/dashboard/customers', icon: Users },
+  {
+    title: 'Settings',
+    href: '/dashboard/settings',
+    icon: Settings,
+  },
+];
+
+export function Sidebar() {
+  const pathname = usePathname();
+
+  const handleSignOut = async () => {
+    await signOut();
+    window.location.href = '/login';
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-gray-950 text-gray-200 border-r border-gray-800">
+      <div className="p-6">
+        <h1 className="text-2xl font-bold text-white">Billing Software</h1>
+      </div>
+      
+      <nav className="flex-1 px-4 py-2 space-y-1">
+        {navItems.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={cn(
+              "flex items-center px-4 py-3 text-sm font-medium rounded-md hover:bg-gray-800",
+              pathname === item.href ? "bg-gray-800 text-white" : "text-gray-300"
+            )}
+          >
+            <item.icon className="w-5 h-5 mr-3" />
+            {item.title}
+          </Link>
+        ))}
+
+        {/* Manage Customers section */}
+        <div className="mt-4">
+          <div className="px-4 py-2 text-xs font-semibold uppercase text-gray-400">Manage Customers</div>
+          <div className="ml-2 space-y-1">
+            {[
+              { title: 'Customers', href: '/dashboard/customers' },
+              { title: 'Customer Tax Details', href: '/dashboard/customer_tax_details' },
+              { title: 'Card Details', href: '/dashboard/card_details' },
+              { title: 'Identity Documents', href: '/dashboard/identity_documents' },
+              { title: 'Accounts', href: '/dashboard/accounts' },
+              { title: 'Transactions', href: '/dashboard/transactions' },
+              { title: 'Customer Credits', href: '/dashboard/customer_credits' },
+              { title: 'Payment Alerts', href: '/dashboard/payment_alerts' },
+            ].map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "block px-6 py-2 text-sm rounded-md hover:bg-gray-800",
+                  pathname === item.href ? "bg-gray-800 text-white" : "text-gray-300"
+                )}
+              >
+                {item.title}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </nav>
+      
+      <div className="p-4 mt-auto">
+        <button
+          onClick={handleSignOut}
+          className="flex items-center w-full px-4 py-3 text-sm font-medium text-gray-300 rounded-md hover:bg-gray-800 hover:text-white"
+        >
+          <LogOut className="w-5 h-5 mr-3" />
+          Sign Out
+        </button>
+      </div>
+    </div>
+  );
+}
