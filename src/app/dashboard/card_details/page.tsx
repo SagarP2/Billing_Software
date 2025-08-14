@@ -43,6 +43,15 @@ export default function CardDetailsPage() {
         return;
       }
 
+      // Validate card number
+      if (!values.card_number || values.card_number.length < 12 || values.card_number.length > 19) {
+        alert('Please enter a valid card number (12-19 digits)');
+        return;
+      }
+
+      // Remove any spaces or special characters from card number
+      values.card_number = values.card_number.replace(/[^0-9]/g, '');
+
       if (editing) {
         await fetch(`/api/${schema.table}/${editing.id}`, { 
           method: 'PATCH', 

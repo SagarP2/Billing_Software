@@ -99,12 +99,14 @@ export const schemas: Record<string, TableSchema> = {
         "Kotak Classic Debit Card",
         "Kotak Premium Debit Card"
       ] },
+      { name: "card_number", label: "Card Number", type: "text", required: true },
     ],
     listColumns: [
       { key: "customer_id", label: "Customer" },
       { key: "bank_name", label: "Bank" },
       { key: "card_type", label: "Type" },
       { key: "card_name", label: "Name on Card" },
+      { key: "card_number", label: "Card Number" },
     ],
   },
   identity_documents: {
