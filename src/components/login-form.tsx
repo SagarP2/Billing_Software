@@ -1,82 +1,147 @@
-import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { createBrowserSupabaseClient } from '@/lib/auth'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+"use client";
 
-export default function LoginForm() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const supabase = createBrowserSupabaseClient()
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { signIn } from '@/lib/auth';
+import { loginSchema } from '@/lib/validations';
 
-  // Show message if passed in URL (e.g., after registration)
-  const message = searchParams.get('message')
+type LoginFormValues = z.infer<typeof loginSchema>;
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
+export function LoginForm({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  });
 
-    const formData = new FormData(e.currentTarget)
-    const email = formData.get('email') as string
-    const password = formData.get('password') as string
-
+  const onSubmit = async (data: LoginFormValues) => {
+    setIsLoading(true);
+    setError(null);
+    
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (signInError) throw signInError
-
-      // Redirect to dashboard on successful login
-      router.push('/dashboard')
-      router.refresh() // Refresh to update auth state
+      const result = await signIn({
+        email: data.email,
+        password: data.password,
+      });
+      
+      console.log('Login successful, redirecting to admin page');
+      router.push('/admin');
     } catch (err: any) {
-      setError(err.message || 'An error occurred during login')
+      console.error('Login error:', err);
+      setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
-      setLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {message && (
-        <div className="bg-blue-100 text-blue-700 p-3 rounded">{message}</div>
-      )}
-      
-      <div>
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          required
-          placeholder="Enter your email"
-        />
-      </div>
-
-      <div>
-        <Label htmlFor="password">Password</Label>
-        <Input
-          id="password"
-          name="password"
-          type="password"
-          required
-          placeholder="Enter your password"
-        />
-      </div>
-
-      {error && (
-        <div className="text-red-500 text-sm">{error}</div>
-      )}
-
-      <Button type="submit" disabled={loading} className="w-full">
-        {loading ? 'Signing in...' : 'Sign In'}
-      </Button>
-    </form>
+    <div className={cn("flex flex-col gap-6", className)} {...props}>
+      <Card>
+        <CardHeader>
+          <CardTitle>Login to your account</CardTitle>
+          <CardDescription>
+            Enter your email below to login to your account
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <div className={`mb-6 border px-4 py-3 rounded-md text-sm ${
+              error.includes('Email not verified') 
+                ? 'bg-yellow-50 border-yellow-200 text-yellow-700' 
+                : 'bg-red-50 border-red-200 text-red-700'
+            }`}>
+              {error}
+              {error.includes('Email not verified') && (
+                <div className="mt-2">
+                  <p>Please check your inbox and spam folder for the verification email.</p>
+                </div>
+              )}
+            </div>
+          )}
+          
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <div className="flex flex-col gap-6">
+              <div className="grid gap-3">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="name@example.com"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  autoCorrect="off"
+                  disabled={isLoading}
+                  {...register('email')}
+                />
+                {errors?.email && (
+                  <p className="text-sm text-red-500">{errors.email.message}</p>
+                )}
+              </div>
+              <div className="grid gap-3">
+                <div className="flex items-center">
+                  <Label htmlFor="password">Password</Label>
+                  <Link
+                    href="/forgot-password"
+                    className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+                <Input 
+                  id="password" 
+                  type="password" 
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  disabled={isLoading}
+                  {...register('password')} 
+                />
+                {errors?.password && (
+                  <p className="text-sm text-red-500">{errors.password.message}</p>
+                )}
+              </div>
+              <div className="flex flex-col gap-3">
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? 'Signing in...' : 'Login'}
+                </Button>
+              </div>
+            </div>
+            <div className="mt-4 text-center text-sm">
+              Don&apos;t have an account?{" "}
+              <Link href="/register" className="underline underline-offset-4 text-blue-600 hover:text-blue-500">
+                Sign up
+              </Link>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   )
 }
