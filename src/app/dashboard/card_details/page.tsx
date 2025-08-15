@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 // Use our API backed by PostgreSQL
 import DataTable from "@/components/admin/DataTable";
-import CrudFormModal from "@/components/admin/CrudFormModal";
+import CardDetailsFormModal from "@/components/admin/CardDetailsFormModal";
 import { schemas } from "@/lib/tableSchemas";
 
 const schema = schemas.card_details;
@@ -13,53 +13,108 @@ export default function CardDetailsPage() {
   const [editing, setEditing] = useState<any | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/${schema.table}`);
-    setRows((await res.json()) ?? []);
+    try {
+      // First ensure the card_number column exists
+      await fetch('/api/migrate');
+      
+      const res = await fetch(`/api/${schema.table}`);
+      const data = await res.json();
+      
+      // Transform the data to include customer names
+      const transformedData = await Promise.all((data ?? []).map(async (row: any) => {
+        try {
+          const customerRes = await fetch(`/api/customers/${row.customer_id}`);
+          const customer = await customerRes.json();
+          return {
+            ...row,
+            customer_name: customer.full_name
+          };
+        } catch (err) {
+          console.error('Error fetching customer:', err);
+          return row;
+        }
+      }));
+      
+      setRows(transformedData);
+    } catch (err) {
+      console.error('Error loading data:', err);
+      setRows([]);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  // Get available card names based on selected bank and type
-  const getAvailableCards = (bankName: string, cardType: string) => {
-    const cardOptions = schema.fields.find(f => f.name === 'card_name')?.enumValues || [];
-    return cardOptions.filter(card => 
-      card.startsWith(bankName.split(' ')[0]) && // Match bank prefix
-      card.includes(cardType.split(' ')[0]) // Match card type (Credit/Debit)
-    );
-  };
-
   const onSubmit = async (values: Record<string, any>) => {
     try {
-      // Validate required fields
-      if (!values.bank_name || !values.card_type) {
-        alert('Bank Name and Card Type are required');
-        return;
+      console.log('Submitting card details:', values);
+      
+      // Make a clean copy of the values to send
+      const dataToSubmit = { ...values };
+      
+      // Ensure we're sending the right data types
+      if (dataToSubmit.customer_id) {
+        // Make sure customer_id is properly formatted (some APIs expect string, some expect number)
+        dataToSubmit.customer_id = String(dataToSubmit.customer_id);
       }
-
-      // Validate card name matches bank and type
-      const availableCards = getAvailableCards(values.bank_name, values.card_type);
-      if (!availableCards.includes(values.card_name)) {
-        alert('Selected card is not valid for the chosen bank and type');
-        return;
-      }
+      
+      console.log('Final data to submit:', JSON.stringify(dataToSubmit, null, 2));
 
       if (editing) {
-        await fetch(`/api/${schema.table}/${editing.id}`, { 
+        console.log('Updating existing card details with ID:', editing.id);
+        const res = await fetch(`/api/${schema.table}/${editing.id}`, { 
           method: 'PATCH', 
           headers: { 'Content-Type': 'application/json' }, 
-          body: JSON.stringify(values) 
+          body: JSON.stringify(dataToSubmit) 
         });
+        
+        const responseText = await res.text();
+        console.log('Response status:', res.status);
+        console.log('Response text:', responseText);
+        
+        if (!res.ok) {
+          let errorMessage = 'Failed to update card details';
+          try {
+            const errorData = JSON.parse(responseText);
+            errorMessage = errorData.error || errorMessage;
+          } catch (parseError) {
+            console.error('Error parsing error response:', parseError);
+          }
+          throw new Error(errorMessage);
+        }
       } else {
-        await fetch(`/api/${schema.table}`, { 
+        console.log('Creating new card details');
+        const res = await fetch(`/api/${schema.table}`, { 
           method: 'POST', 
           headers: { 'Content-Type': 'application/json' }, 
-          body: JSON.stringify(values) 
+          body: JSON.stringify(dataToSubmit) 
         });
+        
+        const responseText = await res.text();
+        console.log('Response status:', res.status);
+        console.log('Response text:', responseText);
+        
+        if (!res.ok) {
+          let errorMessage = 'Failed to create card details';
+          try {
+            const errorData = JSON.parse(responseText);
+            errorMessage = errorData.error || errorMessage;
+          } catch (parseError) {
+            console.error('Error parsing error response:', parseError);
+          }
+          throw new Error(errorMessage);
+        }
       }
+      
       await load();
+      setOpen(false); // Close the modal after successful submission
     } catch (err) {
       console.error('Error saving card details:', err);
-      alert('Error saving card details. Please try again.');
+      if (err instanceof Error) {
+        alert(`Error saving card details: ${err.message}`);
+      } else {
+        alert('Error saving card details. Please try again.');
+      }
+      throw err; // Re-throw to propagate to the form component
     }
   };
 
@@ -76,7 +131,13 @@ export default function CardDetailsPage() {
         <button className="px-3 py-2 rounded bg-blue-600 text-white" onClick={() => { setEditing(null); setOpen(true); }}>Add New</button>
       </div>
       <DataTable data={rows} columns={schema.listColumns as any} onEdit={(r)=>{setEditing(r); setOpen(true);}} onDelete={onDelete} />
-      <CrudFormModal open={open} onClose={()=>setOpen(false)} fields={schema.fields} initial={editing} onSubmit={onSubmit} title={editing?`Edit ${schema.title}`:`Add ${schema.title}`} />
+      <CardDetailsFormModal 
+        open={open} 
+        onClose={()=>setOpen(false)} 
+        initial={editing} 
+        onSubmit={onSubmit} 
+        title={editing?`Edit ${schema.title}`:`Add ${schema.title}`} 
+      />
     </div>
   );
 }

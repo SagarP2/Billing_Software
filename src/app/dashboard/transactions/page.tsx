@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 // Use our API backed by PostgreSQL
 import DataTable from "@/components/admin/DataTable";
-import CrudFormModal from "@/components/admin/CrudFormModal";
+import TransactionFormModal from "@/components/admin/TransactionFormModal";
 import { schemas } from "@/lib/tableSchemas";
 
 const schema = schemas.transactions;
@@ -76,46 +76,60 @@ export default function TransactionsPage() {
   };
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/${schema.table}`);
-    const data = await res.json() ?? [];
-    setRows(data);
-    setTotals(calculateTotals(data));
+    try {
+      // First ensure the transactions table has the required columns
+      console.log('Running transactions table migration...');
+      const migrateRes = await fetch('/api/migrate-transactions');
+      if (!migrateRes.ok) {
+        console.error('Migration failed:', await migrateRes.text());
+      } else {
+        console.log('Migration successful:', await migrateRes.json());
+      }
+      
+      // Now fetch transactions
+      const res = await fetch(`/api/${schema.table}`);
+      const data = await res.json() ?? [];
+      
+      // Transform the data to include customer names
+      const transformedData = await Promise.all((data ?? []).map(async (row: any) => {
+        try {
+          const customerRes = await fetch(`/api/customers/${row.customer_id}`);
+          const customer = await customerRes.json();
+          return {
+            ...row,
+            customer_name: customer.full_name
+          };
+        } catch (err) {
+          console.error('Error fetching customer:', err);
+          return row;
+        }
+      }));
+      
+      setRows(transformedData);
+      setTotals(calculateTotals(transformedData));
+    } catch (err) {
+      console.error('Error loading transactions:', err);
+      setRows([]);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  // Calculate tax, MDR, and charges based on POS type and amount
-  const calculateTransactionFees = (posType: string, amount: number) => {
-    let tax = 0;
-    let mdr = 0;
-    let charges = 0;
-
-    // Tax rates based on POS type (CC)
-    const taxRates: Record<string, number> = {
-      'MP': 2.80,
-      'MOS': 2.50,
-      'INJ': 3.50
-    };
-
-    // MDR rates based on POS type
-    const mdrRates: Record<string, number> = {
-      'MP': 2.00,
-      'MOS': 1.80,
-      'INJ': 2.50
-    };
-
+  // Calculate tax, MDR, and charges based on tax rate, mdr rate and amount
+  const calculateTransactionFees = (amount: number, taxRate: number, mdrRate: number) => {
     // Calculate tax
-    tax = (amount * taxRates[posType]) / 100;
-
+    const tax = (amount * taxRate) / 100;
+    
     // Calculate MDR
-    mdr = (amount * mdrRates[posType]) / 100;
-
-    // Calculate charges (fixed for now, could be made variable)
-    charges = amount > 0 ? 50 : 0; // Example: ₹50 fixed charge for non-zero transactions
-
-    // Calculate profit (MDR + charges - tax)
-    const profit = mdr + charges - tax;
-
+    const mdr = (amount * mdrRate) / 100;
+    
+    // Calculate charges (fixed for now)
+    const charges = amount > 0 ? 50 : 0; // Example: ₹50 fixed charge for non-zero transactions
+    
+    // Calculate profit (Tax - MDR) as specified
+    // For example: Amount 4000, Tax Rate 3.5% (140), MDR 1.5% (60), Profit = 140 - 60 = 80
+    const profit = tax - mdr;
+    
     return {
       tax: Number(tax.toFixed(2)),
       mdr: Number(mdr.toFixed(2)),
@@ -126,42 +140,96 @@ export default function TransactionsPage() {
 
   const onSubmit = async (values: Record<string, any>) => {
     try {
+      console.log('Transaction onSubmit received values:', JSON.stringify(values, null, 2));
+      
       // Validate required fields
-      if (!values.pos_type || !values.amount) {
-        alert('POS Type and Amount are required');
+      if (!values.customer_id || !values.transaction_type || !values.pos_type || !values.amount || !values.tax_rate) {
+        const message = 'Customer, Transaction Type, POS Type, Amount, and Tax Rate are required';
+        console.error(message, values);
+        alert(message);
         return;
       }
 
       // Calculate fees
-      const fees = calculateTransactionFees(values.pos_type, Number(values.amount));
+      const fees = calculateTransactionFees(
+        Number(values.amount), 
+        Number(values.tax_rate), 
+        Number(values.mdr)
+      );
 
+      // Always use current date/time for new transactions
+      const currentDateTime = new Date().toISOString();
+      
       // Add calculated values
       const updatedValues = {
         ...values,
         tax: fees.tax,
-        mdr: fees.mdr,
+        mdr: Number(values.mdr), // Use the MDR value from the form (already set based on tax rate)
         charges: fees.charges,
         profit: fees.profit,
-        transaction_date: values.transaction_date || new Date().toISOString()
+        transaction_date: editing ? values.transaction_date : currentDateTime // Only use current date for new transactions
       };
+      
+      console.log('Final transaction values to submit:', JSON.stringify(updatedValues, null, 2));
+      
+      // Remove any fields that aren't in the database schema
+      const cleanValues = Object.fromEntries(
+        Object.entries(updatedValues).filter(([key]) => {
+          // Get the field names from the schema
+          const fieldNames = schema.fields.map(f => f.name);
+          return fieldNames.includes(key);
+        })
+      );
+      
+      console.log('Cleaned transaction values:', JSON.stringify(cleanValues, null, 2));
 
+      let response;
       if (editing) {
-        await fetch(`/api/${schema.table}/${editing.id}`, { 
+        console.log(`Updating transaction with ID: ${editing.id}`);
+        response = await fetch(`/api/${schema.table}/${editing.id}`, { 
           method: 'PATCH', 
           headers: { 'Content-Type': 'application/json' }, 
-          body: JSON.stringify(updatedValues) 
+          body: JSON.stringify(cleanValues) 
         });
       } else {
-        await fetch(`/api/${schema.table}`, { 
+        console.log('Creating new transaction');
+        response = await fetch(`/api/${schema.table}`, { 
           method: 'POST', 
           headers: { 'Content-Type': 'application/json' }, 
-          body: JSON.stringify(updatedValues) 
+          body: JSON.stringify(cleanValues) 
         });
       }
+      
+      // Check if the request was successful
+      if (!response.ok) {
+        const responseText = await response.text();
+        console.error('Error response status:', response.status);
+        console.error('Error response text:', responseText);
+        
+        let errorMessage = 'Failed to save transaction';
+        try {
+          const errorData = JSON.parse(responseText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (parseError) {
+          console.error('Error parsing error response:', parseError);
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      // Successfully saved
+      console.log('Transaction saved successfully');
       await load();
+      setOpen(false);
+      return await response.json();
     } catch (err) {
       console.error('Error saving transaction:', err);
-      alert('Error saving transaction. Please try again.');
+      if (err instanceof Error) {
+        alert(`Error saving transaction: ${err.message}`);
+      } else {
+        alert('Error saving transaction. Please try again.');
+      }
+      throw err;
     }
   };
 
@@ -260,7 +328,13 @@ export default function TransactionsPage() {
       </div>
 
       <DataTable data={rows} columns={schema.listColumns as any} onEdit={(r)=>{setEditing(r); setOpen(true);}} onDelete={onDelete} />
-      <CrudFormModal open={open} onClose={()=>setOpen(false)} fields={schema.fields} initial={editing} onSubmit={onSubmit} title={editing?`Edit ${schema.title}`:`Add ${schema.title}`} />
+      <TransactionFormModal 
+        open={open} 
+        onClose={()=>setOpen(false)} 
+        initial={editing} 
+        onSubmit={onSubmit} 
+        title={editing?`Edit ${schema.title}`:`Add ${schema.title}`} 
+      />
     </div>
   );
 }

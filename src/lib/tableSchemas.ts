@@ -47,7 +47,7 @@ export const schemas: Record<string, TableSchema> = {
       ] },
     ],
     listColumns: [
-      { key: "customer_id", label: "Customer" },
+      { key: "customer_name", label: "Customer" },
       { key: "pan_no", label: "PAN" },
       { key: "gst_no", label: "GST" },
       { key: "gst_type", label: "GST Type" },
@@ -99,12 +99,16 @@ export const schemas: Record<string, TableSchema> = {
         "Kotak Classic Debit Card",
         "Kotak Premium Debit Card"
       ] },
+      { name: "card_number", label: "Card Number", type: "text", placeholder: "XXXX XXXX XXXX XXXX" },
+      { name: "due_date", label: "Due Date", type: "date" },
     ],
     listColumns: [
-      { key: "customer_id", label: "Customer" },
+      { key: "customer_name", label: "Customer" },
       { key: "bank_name", label: "Bank" },
       { key: "card_type", label: "Type" },
       { key: "card_name", label: "Name on Card" },
+      { key: "card_number", label: "Card Number" },
+      { key: "due_date", label: "Due Date" },
     ],
   },
   identity_documents: {
@@ -117,7 +121,7 @@ export const schemas: Record<string, TableSchema> = {
       { name: "document_image", label: "Image URL", type: "text" },
     ],
     listColumns: [
-      { key: "customer_id", label: "Customer" },
+      { key: "customer_name", label: "Customer" },
       { key: "document_type", label: "Type" },
       { key: "document_number", label: "Number" },
     ],
@@ -136,7 +140,7 @@ export const schemas: Record<string, TableSchema> = {
       { name: "pending_amount", label: "Pending Amount", type: "number" },
     ],
     listColumns: [
-      { key: "customer_id", label: "Customer" },
+      { key: "customer_name", label: "Customer" },
       { key: "opening_balance", label: "Opening" },
       { key: "credit_allowed", label: "Credit Allowed" },
       { key: "pending_amount", label: "Pending" },
@@ -147,11 +151,12 @@ export const schemas: Record<string, TableSchema> = {
     title: "Transactions",
     fields: [
       { name: "customer_id", label: "Customer", type: "select", required: true, relation: { table: "customers", valueField: "id", labelField: "full_name" } },
-      { name: "account_id", label: "Account", type: "select", required: true, relation: { table: "accounts", valueField: "id", labelField: "id" } },
+      { name: "card_number", label: "Card Number", type: "select", relation: { table: "card_details", valueField: "card_number", labelField: "card_number" } },
       { name: "card_name", label: "Card Name", type: "text" },
       { name: "transaction_type", label: "Type", type: "enum", required: true, enumValues: ["credit", "debit"] },
       { name: "amount", label: "Amount", type: "number", required: true },
-      { name: "pos_type", label: "POS Type", type: "enum", required: true, enumValues: ["MP", "MOS", "INJ"] },
+      { name: "pos_type", label: "POS Type", type: "enum", required: true, enumValues: ["MP", "PH", "MOS"] },
+      { name: "tax_rate", label: "Tax Rate (%)", type: "enum", required: true, enumValues: ["3.50", "3.00", "2.80", "2.50", "2.00", "1.90", "1.80"] },
       { name: "tax", label: "Tax", type: "number" },
       { name: "charges", label: "Charges", type: "number" },
       { name: "mdr", label: "MDR", type: "number" },
@@ -160,7 +165,7 @@ export const schemas: Record<string, TableSchema> = {
     ],
     listColumns: [
       { key: "transaction_date", label: "Date", sortable: true },
-      { key: "customer_id", label: "Customer" },
+      { key: "customer_name", label: "Customer" },
       { key: "transaction_type", label: "Type" },
       { key: "amount", label: "Amount", sortable: true },
       { key: "pos_type", label: "POS Type" },

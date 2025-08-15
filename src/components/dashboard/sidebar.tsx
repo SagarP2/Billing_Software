@@ -8,7 +8,8 @@ import {
   FileText,
   Users,
   Settings,
-  LogOut
+  LogOut,
+  CreditCard
 } from 'lucide-react';
 import { signOut } from '@/lib/auth';
 
@@ -19,12 +20,20 @@ const navItems = [
     icon: LayoutDashboard,
   },
   {
+    title: 'Customers',
+    href: '/dashboard/customers',
+    icon: Users,
+  },
+  {
+    title: 'Card Details',
+    href: '/dashboard/card_details',
+    icon: CreditCard,
+  },
+  {
     title: 'Invoices',
     href: '/dashboard/invoices',
     icon: FileText,
   },
-  // Keep legacy single Customers link for backward-compat
-  { title: 'Customers', href: '/dashboard/customers', icon: Users },
   {
     title: 'Settings',
     href: '/dashboard/settings',
@@ -61,33 +70,7 @@ export function Sidebar() {
           </Link>
         ))}
 
-        {/* Manage Customers section */}
-        <div className="mt-4">
-          <div className="px-4 py-2 text-xs font-semibold uppercase text-gray-400">Manage Customers</div>
-          <div className="ml-2 space-y-1">
-            {[
-              { title: 'Customers', href: '/dashboard/customers' },
-              { title: 'Customer Tax Details', href: '/dashboard/customer_tax_details' },
-              { title: 'Card Details', href: '/dashboard/card_details' },
-              { title: 'Identity Documents', href: '/dashboard/identity_documents' },
-              { title: 'Accounts', href: '/dashboard/accounts' },
-              { title: 'Transactions', href: '/dashboard/transactions' },
-              { title: 'Customer Credits', href: '/dashboard/customer_credits' },
-              { title: 'Payment Alerts', href: '/dashboard/payment_alerts' },
-            ].map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "block px-6 py-2 text-sm rounded-md hover:bg-gray-800",
-                  pathname === item.href ? "bg-gray-800 text-white" : "text-gray-300"
-                )}
-              >
-                {item.title}
-              </Link>
-            ))}
-          </div>
-        </div>
+
       </nav>
       
       <div className="p-4 mt-auto">

@@ -14,7 +14,24 @@ export default function IdentityDocumentsPage() {
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/${schema.table}`);
-    setRows((await res.json()) ?? []);
+    const data = await res.json();
+    
+    // Transform the data to include customer names
+    const transformedData = await Promise.all((data ?? []).map(async (row: any) => {
+      try {
+        const customerRes = await fetch(`/api/customers/${row.customer_id}`);
+        const customer = await customerRes.json();
+        return {
+          ...row,
+          customer_name: customer.full_name
+        };
+      } catch (err) {
+        console.error('Error fetching customer:', err);
+        return row;
+      }
+    }));
+    
+    setRows(transformedData);
   }, []);
 
   useEffect(() => { load(); }, [load]);
